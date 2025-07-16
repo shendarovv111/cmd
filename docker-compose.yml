@@ -1,0 +1,45 @@
+services:
+  app:
+    build: .
+    command: ./tictactoe
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/tictactoe?sslmode=disable
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  bot:
+    build: .
+    command: ./tgbot
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - SERVICE_URL=http://app:8080/command
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=tictactoe
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+  migrations:
+    build: .
+    command: sh -c "apk add --no-cache postgresql-client && sleep 10 && sed -n '/^-- +goose Up$/,/^-- +goose Down$/p' /app/migrations/001_init.sql | grep -v '^-- +goose' | psql postgres://postgres:postgres@db:5432/tictactoe"
+    depends_on:
+      - db
+    volumes:
+      - ./migrations:/app/migrations
+
+volumes:
+  postgres_data: 
