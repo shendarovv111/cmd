@@ -16,9 +16,10 @@ import (
 )
 
 type IncomingMessage struct {
-	UserID string  `json:"userId"`
-	Text   *string `json:"text,omitempty"`
-	Action *string `json:"action,omitempty"`
+	UserID   string  `json:"userId"`
+	UserName string  `json:"userName,omitempty"`
+	Text     *string `json:"text,omitempty"`
+	Action   *string `json:"action,omitempty"`
 }
 
 type OutgoingMessage struct {
@@ -77,9 +78,10 @@ func main() {
 
 func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, serviceURL string) {
 	userID := fmt.Sprintf("chat_%d", message.Chat.ID)
+	userName := getUserName(message.From)
 	text := message.Text
 
-	response, status := sendToBackend(serviceURL, userID, text, nil)
+	response, status := sendToBackend(serviceURL, userID, userName, text, nil)
 	sendResponse(bot, message.Chat.ID, response)
 
 	if strings.HasPrefix(text, "/join ") || strings.HasPrefix(text, "/move ") {
@@ -87,7 +89,7 @@ func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, serviceURL s
 			if status == http.StatusOK && !strings.Contains(successResponse.Text, "ошибка") && !strings.Contains(successResponse.Text, "не ваш ход") && !strings.Contains(successResponse.Text, "не активна") {
 				log.Printf("Отправляем push-уведомления для успешной команды: %s", text)
 				notifyURL := strings.Replace(serviceURL, "/command", "/notify", 1)
-				notifyResponse, _ := sendToBackend(notifyURL, userID, text, nil)
+				notifyResponse, _ := sendToBackend(notifyURL, userID, userName, text, nil)
 
 				if messages, ok := notifyResponse.(OutgoingMessages); ok {
 					log.Printf("Получено %d push-уведомлений", len(messages.Messages))
@@ -110,9 +112,10 @@ func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, serviceURL s
 
 func handleCallback(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery, serviceURL string) {
 	userID := fmt.Sprintf("chat_%d", callback.Message.Chat.ID)
+	userName := getUserName(callback.From)
 	action := callback.Data
 
-	response, status := sendToBackend(serviceURL, userID, "", &action)
+	response, status := sendToBackend(serviceURL, userID, userName, "", &action)
 	sendResponse(bot, callback.Message.Chat.ID, response)
 
 	if strings.HasPrefix(action, "/join ") || strings.HasPrefix(action, "/move ") {
@@ -120,7 +123,7 @@ func handleCallback(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery, serv
 			if status == http.StatusOK && !strings.Contains(successResponse.Text, "ошибка") && !strings.Contains(successResponse.Text, "не ваш ход") && !strings.Contains(successResponse.Text, "не активна") {
 				log.Printf("Отправляем push-уведомления для успешного действия: %s", action)
 				notifyURL := strings.Replace(serviceURL, "/command", "/notify", 1)
-				notifyResponse, _ := sendToBackend(notifyURL, userID, "", &action)
+				notifyResponse, _ := sendToBackend(notifyURL, userID, userName, "", &action)
 
 				if messages, ok := notifyResponse.(OutgoingMessages); ok {
 					log.Printf("Получено %d push-уведомлений для действия", len(messages.Messages))
@@ -144,8 +147,8 @@ func handleCallback(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery, serv
 	bot.Send(callbackConfig)
 }
 
-func sendToBackend(serviceURL, userID, text string, action *string) (interface{}, int) {
-	msg := IncomingMessage{UserID: userID}
+func sendToBackend(serviceURL, userID, userName, text string, action *string) (interface{}, int) {
+	msg := IncomingMessage{UserID: userID, UserName: userName}
 	if text != "" {
 		msg.Text = &text
 	}
@@ -258,4 +261,24 @@ func sendSingleMessage(bot *tgbotapi.BotAPI, chatID int64, response OutgoingMess
 	if _, err := bot.Send(msg); err != nil {
 		log.Printf("Ошибка при отправке сообщения: %v", err)
 	}
+}
+
+func getUserName(user *tgbotapi.User) string {
+	if user == nil {
+		return ""
+	}
+
+	if user.FirstName != "" && user.LastName != "" {
+		return fmt.Sprintf("%s %s", user.FirstName, user.LastName)
+	}
+
+	if user.UserName != "" {
+		return "@" + user.UserName
+	}
+
+	if user.FirstName != "" {
+		return user.FirstName
+	}
+
+	return "Игрок"
 }

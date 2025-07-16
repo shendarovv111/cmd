@@ -1,9 +1,10 @@
 package dto
 
 type IncomingMessage struct {
-	UserID string  `json:"userId"`
-	Text   *string `json:"text,omitempty"`
-	Action *string `json:"action,omitempty"`
+	UserID   string  `json:"userId"`
+	UserName string  `json:"userName,omitempty"`
+	Text     *string `json:"text,omitempty"`
+	Action   *string `json:"action,omitempty"`
 }
 
 type OutgoingMessage struct {

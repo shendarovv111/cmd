@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tictactoe/internal/domain"
@@ -17,7 +18,7 @@ func NewGameService(repo domain.GameRepository) *GameService {
 }
 
 func (s *GameService) CreateGame(req dto.CreateGameRequest) (*dto.OutgoingMessage, error) {
-	game := domain.NewGame(req.UserID)
+	game := domain.NewGame(req.UserID, req.UserName)
 	game.ID = uuid.New().String()
 
 	if err := s.repo.Create(game); err != nil {
@@ -40,23 +41,31 @@ func (s *GameService) ListGames(userID string) (*dto.OutgoingMessage, error) {
 	if len(games) == 0 {
 		return dto.NewOutgoingMessage(
 			userID,
-			"Нет доступных игр",
+			"📭 Нет доступных игр",
 			[]dto.Button{
-				{Text: "Создать игру", Action: "/new"},
-				{Text: "Моя игра", Action: "/mygame"},
+				{Text: "🆕 Создать игру", Action: "/new"},
+				{Text: "🎮 Моя игра", Action: "/mygame"},
 			},
 		), nil
 	}
 
 	var buttons []dto.Button
-	for _, game := range games {
+	for i, game := range games {
+		creatorName := game.Players[0].Name
+		if creatorName == "" {
+			creatorName = getUserDisplayName(game.Players[0].ID)
+		}
+		buttonText := fmt.Sprintf("🎮 Игра %d", i+1)
+		if creatorName != "" {
+			buttonText += fmt.Sprintf(" (от %s)", creatorName)
+		}
 		buttons = append(buttons, dto.Button{
-			Text:   fmt.Sprintf("Игра %s (создатель: %s)", game.ID[:8], game.Players[0].ID),
+			Text:   buttonText,
 			Action: fmt.Sprintf("/join %s", game.ID),
 		})
 	}
 
-	return dto.NewOutgoingMessage(userID, "Доступные игры:", buttons), nil
+	return dto.NewOutgoingMessage(userID, fmt.Sprintf("🎯 Доступные игры (%d):", len(games)), buttons), nil
 }
 
 func (s *GameService) JoinGame(req dto.JoinGameRequest) (*dto.OutgoingMessages, error) {
@@ -65,7 +74,7 @@ func (s *GameService) JoinGame(req dto.JoinGameRequest) (*dto.OutgoingMessages, 
 		return nil, fmt.Errorf("ошибка получения игры: %w", err)
 	}
 
-	if err := game.JoinGame(req.UserID); err != nil {
+	if err := game.JoinGame(req.UserID, req.UserName); err != nil {
 		return nil, err
 	}
 
@@ -85,35 +94,35 @@ func (s *GameService) JoinGame(req dto.JoinGameRequest) (*dto.OutgoingMessages, 
 }
 
 func (s *GameService) ShowHelp(userID string) *dto.OutgoingMessage {
-	helpText := `🎮 Добро пожаловать в игру Крестики-нолики!
+	helpText := `🎯 Добро пожаловать в Tic-Tac-Toe!
 
-Доступные команды:
+✨ Доступные команды:
 • /new - создать новую игру
 • /list - список доступных игр
 
-Как играть:
+🎲 Как играть:
 1. Создайте игру командой /new
 2. Поделитесь ссылкой на бота с другом
 3. Друг присоединяется к игре через /list
 4. Игроки делают ходы по очереди
 
-Координаты ходов:
+📍 Координаты ходов:
   1 2 3
-A . . .
-B . . .
-C . . .
+A |_|_|_|
+B |_|_|_|
+C |_|_|_|
 
-Нажимайте на кнопки с координатами (A1, B2, C3 и т.д.) для совершения хода.
+💡 Нажимайте на кнопки с координатами (A1, B2, C3 и т.д.) для совершения хода.
 
-🎉 Удачи в игре!`
+🚀 Удачи в игре!`
 
 	return dto.NewOutgoingMessage(
 		userID,
 		helpText,
 		[]dto.Button{
-			{Text: "Создать игру", Action: "/new"},
-			{Text: "Список игр", Action: "/list"},
-			{Text: "Моя игра", Action: "/mygame"},
+			{Text: "🆕 Создать игру", Action: "/new"},
+			{Text: "📋 Список игр", Action: "/list"},
+			{Text: "🎮 Моя игра", Action: "/mygame"},
 		},
 	)
 }
@@ -137,7 +146,7 @@ func (s *GameService) getGameMessage(game *domain.Game, userID string) *dto.Outg
 	if !found {
 		return dto.NewOutgoingMessage(
 			userID,
-			"Вы не являетесь участником этой игры",
+			"❌ Вы не являетесь участником этой игры",
 			nil,
 		)
 	}
@@ -146,42 +155,42 @@ func (s *GameService) getGameMessage(game *domain.Game, userID string) *dto.Outg
 		var text string
 
 		if game.CheckWin(yourSymbol) {
-			text = "Поздравляем! Вы победили!"
+			text = "🎉 Поздравляем! Вы победили! 🏆"
 		} else if game.CheckWin(getOpponentSymbol(yourSymbol)) {
-			text = "Игра окончена. Победил противник."
+			text = "😔 Игра окончена. Победил противник."
 		} else {
-			text = "Игра окончена. Ничья!"
+			text = "🤝 Игра окончена. Ничья!"
 		}
 
 		return dto.NewOutgoingMessage(
 			userID,
 			fmt.Sprintf("%s\n\n%s", boardText, text),
 			[]dto.Button{
-				{Text: "Новая игра", Action: "/new"},
-				{Text: "Список игр", Action: "/list"},
+				{Text: "🆕 Новая игра", Action: "/new"},
+				{Text: "📋 Список игр", Action: "/list"},
 			},
 		)
 	} else if game.Status == domain.GameStatusWaiting {
 		return dto.NewOutgoingMessage(
 			userID,
-			fmt.Sprintf("%s\n\nОжидаем второго игрока...", boardText),
+			fmt.Sprintf("%s\n\n⏳ Ожидаем второго игрока...", boardText),
 			[]dto.Button{
-				{Text: "Список игр", Action: "/list"},
-				{Text: "Моя игра", Action: "/mygame"},
+				{Text: "📋 Список игр", Action: "/list"},
+				{Text: "🎮 Моя игра", Action: "/mygame"},
 			},
 		)
 	} else if isYourTurn {
 		return dto.NewOutgoingMessage(
 			userID,
-			fmt.Sprintf("%s\n\nВаш ход! Вы играете за %s", boardText, yourSymbol),
+			fmt.Sprintf("%s\n\n🎯 Ваш ход! Вы играете за %s", boardText, yourSymbol),
 			generateMoveButtons(game.ID, game.Board),
 		)
 	} else {
 		return dto.NewOutgoingMessage(
 			userID,
-			fmt.Sprintf("%s\n\nОжидаем ход противника... Вы играете за %s", boardText, yourSymbol),
+			fmt.Sprintf("%s\n\n⏳ Ожидаем ход противника... Вы играете за %s", boardText, yourSymbol),
 			[]dto.Button{
-				{Text: "Моя игра", Action: "/mygame"},
+				{Text: "🎮 Моя игра", Action: "/mygame"},
 			},
 		)
 	}
@@ -253,10 +262,10 @@ func (s *GameService) GetActiveGame(userID string) (*dto.OutgoingMessage, error)
 
 	return dto.NewOutgoingMessage(
 		userID,
-		"У вас нет активной игры. Создайте новую или присоединитесь к существующей.",
+		"🎮 У вас нет активной игры. Создайте новую или присоединитесь к существующей.",
 		[]dto.Button{
-			{Text: "Создать игру", Action: "/new"},
-			{Text: "Список игр", Action: "/list"},
+			{Text: "🆕 Создать игру", Action: "/new"},
+			{Text: "📋 Список игр", Action: "/list"},
 		},
 	), nil
 }
@@ -280,8 +289,7 @@ func (s *GameService) GetGameNotifications(game *domain.Game) *dto.OutgoingMessa
 
 func renderBoard(board [3][3]string) string {
 	var result string
-	result += "   1 2 3\n"
-	result += "  +-+-+-+\n"
+	result += "  1 2 3\n"
 	rows := []string{"A", "B", "C"}
 
 	for i := 0; i < 3; i++ {
@@ -343,4 +351,19 @@ func getOpponentSymbol(symbol string) string {
 		return "O"
 	}
 	return "X"
+}
+
+func getUserDisplayName(userID string) string {
+	if strings.HasPrefix(userID, "chat_") {
+		chatID := strings.TrimPrefix(userID, "chat_")
+		if len(chatID) > 4 {
+			return "Игрок " + chatID[len(chatID)-4:]
+		}
+		return "Игрок " + chatID
+	}
+
+	if len(userID) > 4 {
+		return "Игрок " + userID[len(userID)-4:]
+	}
+	return "Игрок " + userID
 }

@@ -38,7 +38,7 @@ func (h *CommandHandler) HandleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.executeCommand(command, msg.UserID)
+	response, err := h.executeCommand(command, msg.UserID, msg.UserName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -129,10 +129,10 @@ func (h *CommandHandler) getCommand(msg dto.IncomingMessage) string {
 	return ""
 }
 
-func (h *CommandHandler) executeCommand(command, userID string) (interface{}, error) {
+func (h *CommandHandler) executeCommand(command, userID, userName string) (interface{}, error) {
 	switch {
 	case command == "/new":
-		return h.gameService.CreateGame(dto.CreateGameRequest{UserID: userID})
+		return h.gameService.CreateGame(dto.CreateGameRequest{UserID: userID, UserName: userName})
 
 	case command == "/list":
 		return h.gameService.ListGames(userID)
@@ -146,8 +146,9 @@ func (h *CommandHandler) executeCommand(command, userID string) (interface{}, er
 	case strings.HasPrefix(command, "/join "):
 		gameID := strings.TrimPrefix(command, "/join ")
 		response, err := h.gameService.JoinGame(dto.JoinGameRequest{
-			UserID: userID,
-			GameID: gameID,
+			UserID:   userID,
+			UserName: userName,
+			GameID:   gameID,
 		})
 		if err != nil {
 			return nil, err
@@ -166,6 +167,7 @@ func (h *CommandHandler) executeCommand(command, userID string) (interface{}, er
 		}
 		response, err := h.gameService.MakeMove(dto.MakeMoveRequest{
 			UserID:   userID,
+			UserName: userName,
 			GameID:   parts[1],
 			Position: parts[2],
 		})
@@ -182,8 +184,9 @@ func (h *CommandHandler) executeCommand(command, userID string) (interface{}, er
 	case strings.HasPrefix(command, "/game "):
 		gameID := strings.TrimPrefix(command, "/game ")
 		return h.gameService.ShowGame(dto.ShowGameRequest{
-			UserID: userID,
-			GameID: gameID,
+			UserID:   userID,
+			UserName: userName,
+			GameID:   gameID,
 		})
 
 	case command == "/mygame":

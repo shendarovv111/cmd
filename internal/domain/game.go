@@ -6,6 +6,7 @@ import (
 
 type Player struct {
 	ID       string
+	Name     string
 	Symbol   string
 	IsActive bool
 }
@@ -32,10 +33,10 @@ type Coordinate struct {
 	Column int
 }
 
-func NewGame(creatorID string) *Game {
+func NewGame(creatorID, creatorName string) *Game {
 	return &Game{
 		Status:    GameStatusWaiting,
-		Players:   [2]Player{{ID: creatorID, IsActive: false}},
+		Players:   [2]Player{{ID: creatorID, Name: creatorName, IsActive: false}},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -83,7 +84,7 @@ func (g *Game) MakeMove(playerID string, coord Coordinate) error {
 	return nil
 }
 
-func (g *Game) JoinGame(playerID string) error {
+func (g *Game) JoinGame(playerID, playerName string) error {
 	if g.Status != GameStatusWaiting {
 		return ErrCannotJoin
 	}
@@ -92,7 +93,7 @@ func (g *Game) JoinGame(playerID string) error {
 		return ErrAlreadyInGame
 	}
 
-	g.Players[1] = Player{ID: playerID}
+	g.Players[1] = Player{ID: playerID, Name: playerName}
 	g.Status = GameStatusActive
 
 	if time.Now().UnixNano()%2 == 0 {
